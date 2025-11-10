@@ -45,8 +45,8 @@
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/CHICO-CP/fileguard-pro.git
-cd fileguard-pro
+git clone https://github.com/CHICO-CP/rem-limit-file.git
+cd rem-limit-file
 ```
 
 1. **Install dependencies**
@@ -94,7 +94,7 @@ echo '{
 ### File Structure
 
 ```
-fileguard-pro/
+rem-limit-file/
 ├── main.py                 # Main bot executable
 ├── bot_config.py          # Configuration management
 ├── user_manager.py        # User data handling
@@ -229,7 +229,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Developer**: Ghost Developer
 - **GitHub**: [github.com/CHICO-CP](https://github.com/CHICO-CP)
 - **Telegram**: [@Gh0stDeveloper](https://t.me/Gh0stDeveloper)
-- **Issues**: [GitHub Issues](https://github.com/CHICO-CP/fileguard-pro/issues)
+- **Issues**: [GitHub Issues](https://github.com/CHICO-CP/rem-limit-file/issues)
 
 # 🙏 Acknowledgments
 
