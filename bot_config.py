@@ -15,7 +15,7 @@ class BotConfig:
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
     
     # Bot settings
-    BOT_NAME = "FileGuard Pro"
+    BOT_NAME = "Rem"
     BOT_VERSION = "2.0.0"
     ADMIN_ID = None  # Will be set from config
     
@@ -41,7 +41,7 @@ class ConfigManager:
                 'token': input("🤖 Enter the bot token: "),
                 'allowed_group_id': input("👥 Enter the allowed group ID (leave blank for all groups): ") or None,
                 'admin_id': input("👑 Enter the admin user ID (for special commands): ") or None,
-                'welcome_message': "Welcome to FileGuard Pro! 🛡️",
+                'welcome_message': "Welcome to Rem! 🛡️",
                 'auto_cleanup_days': 30
             }
             ConfigManager.save_config(config_data)
