@@ -1,114 +1,127 @@
-# Developer by: @DevPhant0m
-# Channel: @TEAM_CHICO_CP
-
 import telebot
-import os
-import json
-from datetime import datetime, timedelta
+from telebot.types import Message
+import time
+from threading import Thread
 
-# Check if API.json exists and create it if not
-if not os.path.exists('API.json'):
-    with open('API.json', 'w') as api_file:
-        token = input("Enter the bot token: ")
-        group_id = input("Enter the allowed group ID (leave it blank to allow all groups): ")
-        private_id = input("Enter the allowed private chat ID (leave it blank to not allow exceptions): ")
-        data = {
-            'token': token,
-            'group_id': group_id if group_id else None,
-            'private_id': private_id if private_id else None
-        }
-        json.dump(data, api_file, indent=4)
-else:
-    with open('API.json', 'r') as api_file:
-        data = json.load(api_file)
-        token = data['token']
-        group_id = data['group_id']
-        private_id = data['private_id']
+# Bot token
+BOT_TOKEN = "TU_TOKEN_AQUÍ"
+bot = telebot.TeleBot(BOT_TOKEN)
 
-# Initialize the bot
-bot = telebot.TeleBot(token)
+# Configuration
+MAX_ARCHIVOS = 5  
+BLOQUEO_MINUTOS = 15  
+# Data storage
+usuarios = {}  
+bloqueados = {}  
 
-# Check if users.json exists, if not create it
-if not os.path.exists('users.json'):
-    with open('users.json', 'w') as users_file:
-        json.dump({}, users_file)
+def desbloquear_usuario(chat_id, user_id):
+    time.sleep(BLOQUEO_MINUTOS * 60)
+    if user_id in bloqueados:
+        bloqueados.pop(user_id, None)
+        bot.restrict_chat_member(chat_id, user_id, can_send_messages=True, can_send_media_messages=True)
 
-# Load user information
-with open('users.json', 'r') as users_file:
-    users_data = json.load(users_file)
 
-# Constants to define file limit and block duration
-FILE_LIMIT = 3
-BLOCK_DURATION = timedelta(hours=12)
-
-# Command /start
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    bot.reply_to(message, "Welcome to the bot. This bot limits sending files to 3 per user.")
-
-# Command /help
-@bot.message_handler(commands=['help'])
-def send_help(message):
-    bot.reply_to(message, "This bot allows you to send a maximum of 3 files. If you exceed the limit, you won't be able to send any more files.")
-
-# Function to check if the chat is allowed
-def is_chat_allowed(chat_id):
-    if group_id is None:
-        return True  # If no group ID is configured, allow all chats
-    return str(chat_id) == str(group_id)
-
-# Function to check if the user is an exception (allowed private ID)
-def is_user_exception(user_id):
-    if private_id is None:
-        return False  # If no private ID is configured, no exceptions
-    return str(user_id) == str(private_id)
-
-# Check if the user is blocked
-def is_user_blocked(user_id):
-    if str(user_id) in users_data and 'block_until' in users_data[str(user_id)]:
-        return datetime.now() < datetime.fromisoformat(users_data[str(user_id)]['block_until'])
-    return False
-
-# Handle sent files
-@bot.message_handler(content_types=['document'])
-def handle_files(message):
+# Handling file-type messages
+@bot.message_handler(content_types=["document"])
+def manejar_archivos(message: Message):
     chat_id = message.chat.id
     user_id = message.from_user.id
-
-    # Check if the chat is allowed
-    if not is_chat_allowed(chat_id):
-        bot.reply_to(message, "This bot is not allowed in this group.")
+    username = message.from_user.username or message.from_user.first_name
+    miembro = bot.get_chat_member(chat_id, user_id)
+    if miembro.status in ["administrator", "creator"]:
         return
 
-    # Check if the user is an exception
-    if is_user_exception(user_id):
-        bot.reply_to(message, "Your user is exempt from the file limit.")
+    if user_id in bloqueados:
+        bot.reply_to(message, f"🚫 @{username}, you are temporarily blocked from sending files for {BLOQUEO_MINUTOS} minutes.\n🚫 @{username}, estás temporalmente bloqueado para enviar archivos durante {BLOQUEO_MINUTOS} minutos.")
         return
 
-    # Check if the user is blocked
-    if is_user_blocked(user_id):
-        bot.reply_to(message, "You are temporarily blocked from sending files.")
-        return
+    if user_id not in usuarios:
+        usuarios[user_id] = 0
+    usuarios[user_id] += 1
 
-    # Get the user's record, initialize if it does not exist
-    if str(user_id) not in users_data:
-        users_data[str(user_id)] = {'sent_files': 0, 'block_until': None}
+    archivos_restantes = MAX_ARCHIVOS - usuarios[user_id]
 
-    sent_files = users_data[str(user_id)]['sent_files']
-
-    # Check if the user has reached the file limit
-    if sent_files >= FILE_LIMIT:
-        users_data[str(user_id)]['block_until'] = (datetime.now() + BLOCK_DURATION).isoformat()  # Block for 12 hours
-        bot.reply_to(message, "You have reached the limit of 3 files. You are now blocked for 12 hours.")
+    if archivos_restantes > 0:
+        bot.reply_to(
+            message,
+            f"📦 @{username}, you have {archivos_restantes}/{MAX_ARCHIVOS} files remaining to send.\n"
+            f"📦 @{username}, te quedan {archivos_restantes}/{MAX_ARCHIVOS} archivos por enviar."
+        )
     else:
-        users_data[str(user_id)]['sent_files'] += 1
-        remaining_files = FILE_LIMIT - users_data[str(user_id)]['sent_files']
-        bot.reply_to(message, f"File received. You have {remaining_files} files left to send.")
+        bot.restrict_chat_member(chat_id, user_id, can_send_messages=False, can_send_media_messages=False)
+        bloqueados[user_id] = True
+        bot.reply_to(
+            message,
+            f"🚫 @{username}, you have reached the limit of {MAX_ARCHIVOS} files. You are blocked for {BLOQUEO_MINUTOS} minutes.\n"
+            f"🚫 @{username}, has alcanzado el límite de {MAX_ARCHIVOS} archivos. Estás bloqueado durante {BLOQUEO_MINUTOS} minutos."
+        )
 
-    # Save updated user data
-    with open('users.json', 'w') as users_file:
-        json.dump(users_data, users_file, indent=4)
+        Thread(target=desbloquear_usuario, args=(chat_id, user_id)).start()
 
-# Start the bot
-print("Bot is running...")
-bot.polling()
+
+# /start command to explain how the bot works
+@bot.message_handler(commands=["start"])
+def start(message: Message):
+    username = message.from_user.username or message.from_user.first_name
+    bot.reply_to(
+        message,
+        (
+            f"👋 Hello, @{username}! Welcome to the group management bot.\n\n"
+            "📋 *How it works:*\n"
+            f"1️⃣ Each user can send up to {MAX_ARCHIVOS} files.\n"
+            f"2️⃣ If you exceed the limit, you will be temporarily blocked for {BLOQUEO_MINUTOS} minutes.\n"
+            "3️⃣ Admins and the group owner are exempt from this rule.\n\n"
+            "🌟 *Bot Developer:* SP-FUCKER\n"
+            "💬 *Contact:* @Gh0stDeveloper\n\n"
+            "Thank you for following the rules!"
+        ),
+        parse_mode="Markdown"
+    )
+
+
+# Custom command /reset to reset a user's file counter
+@bot.message_handler(commands=["reset"])
+def reset(message: Message):
+    chat_id = message.chat.id
+    if message.reply_to_message:
+        user_id = message.reply_to_message.from_user.id
+        username = message.reply_to_message.from_user.username or message.reply_to_message.from_user.first_name
+
+        miembro = bot.get_chat_member(chat_id, message.from_user.id)
+        if miembro.status in ["administrator", "creator"]:
+            usuarios[user_id] = 0
+            bot.reply_to(
+                message,
+                f"🔄 File counter reset for @{username}.\n"
+                f"🔄 Contador de archivos reiniciado para @{username}."
+            )
+        else:
+            bot.reply_to(message, "🚫 You don't have permission to use this command.\n🚫 No tienes permisos para usar este comando.")
+    else:
+        bot.reply_to(message, "❌ Use this command by replying to a message.\n❌ Usa este comando respondiendo a un mensaje.")
+
+
+# Handling new members in the group
+@bot.message_handler(content_types=["new_chat_members"])
+def bienvenida(message: Message):
+    for nuevo in message.new_chat_members:
+        username = nuevo.username or nuevo.first_name
+        bot.send_message(
+            message.chat.id,
+            (
+                f"🎉 Welcome @{username} to the group! 🎉\n"
+                "📋 Please follow the group rules:\n"
+                f"1️⃣ Each user can send up to {MAX_ARCHIVOS} files.\n"
+                f"2️⃣ If you exceed the limit, you will be blocked for {BLOQUEO_MINUTOS} minutes.\n"
+                "3️⃣ Respect other members and avoid spamming.\n\n"
+                f"🎉 ¡Bienvenido/a @{username} al grupo! 🎉\n"
+                "📋 Por favor, sigue las reglas del grupo:\n"
+                f"1️⃣ Cada usuario puede enviar hasta {MAX_ARCHIVOS} archivos.\n"
+                f"2️⃣ Si superas el límite, serás bloqueado durante {BLOQUEO_MINUTOS} minutos.\n"
+                "3️⃣ Respeta a los demás miembros y evita enviar spam."
+            )
+        )
+
+
+print("🤖 The bot is running...")
+bot.infinity_polling()
